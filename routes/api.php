@@ -14,31 +14,20 @@ use Illuminate\Foundation\Auth\EmailVerificationRequest;
 |--------------------------------------------------------------------------
 */
 
+
+
 Route::post('/register', [AuthController::class, 'register']);
+Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
+Route::post('/resend-otp', [AuthController::class, 'resendOtp']);
 Route::post('/login', [AuthController::class, 'login']);
 
-Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
-    $request->fulfill();
-    return response()->json(['message' => 'Email verified successfully']);
-})->middleware(['signed'])->name('verification.verify');
-
-
-
-Route::middleware(['auth:sanctum', 'verified'])->group(function () {
-
+Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
     Route::get('/user', function (Request $request) {
         return response()->json($request->user());
     });
-
-
-    Route::post('/email/verify/resend', function (Request $request) {
-        $request->user()->sendEmailVerificationNotification();
-        return response()->json(['message' => 'Verification link sent again']); 
-    });
 });
-
 
 
 Route::middleware(['auth:sanctum', 'verified', 'role:admin'])->group(function () {

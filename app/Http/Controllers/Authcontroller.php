@@ -3,49 +3,51 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Otp;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\URL;
-use Illuminate\Auth\Events\Registered;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\SendOtpMail;
+use Carbon\Carbon;
+use Exception;
 
 class AuthController extends Controller
 {
+    // ================= REGISTER =================
     public function register(Request $request)
     {
         try {
             $request->validate([
-                'name' => 'required|string',
-                'email' => 'required|email|unique:users',
-                'password' => 'required|min:6'
+                'name' => 'required|string|max:255',
+                'email' => 'required|email|unique:users,email',
+                'password' => 'required|string|min:6',
             ]);
 
             $user = User::create([
                 'name' => $request->name,
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
-                'role' => 'user'
+                'role' => 'user',
             ]);
 
-      
-            event(new Registered($user));
+         
+            $otpCode = rand(100000, 999999);
+            Otp::create([
+                'user_id' => $user->id,
+                'otp' => $otpCode,
+                'expires_at' => Carbon::now()->addMinutes(5)
+            ]);
 
-            $verificationUrl = URL::temporarySignedRoute(
-                'verification.verify',
-                now()->addMinutes(60),
-                ['id' => $user->id, 'hash' => sha1($user->email)]
-            );
-
-            $token = $user->createToken('api-token')->plainTextToken;
+       
+            Mail::to($user->email)->send(new SendOtpMail($otpCode));
 
             return response()->json([
                 'success' => true,
-                'token' => $token,
-                'user' => $user,
-                'verification_url' => $verificationUrl
-            ]);
+                'message' => 'Registration successful. OTP sent to email.',
+                'user' => $user
+            ], 201);
 
-        } catch (\Exception $e) {
-         
+        } catch (Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Registration failed',
@@ -54,27 +56,73 @@ class AuthController extends Controller
         }
     }
 
+    // ================= VERIFY OTP =================
+    public function verifyOtp(Request $request)
+    {
+        try {
+            $request->validate([
+                'email' => 'required|email',
+                'otp' => 'required'
+            ]);
+
+            $user = User::where('email', $request->email)->first();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found.'
+                ], 404);
+            }
+
+            $otp = Otp::where('user_id', $user->id)
+                      ->where('otp', $request->otp)
+                      ->where('expires_at', '>', Carbon::now())
+                      ->first();
+
+            if (!$otp) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid or expired OTP.'
+                ], 400);
+            }
+
+            $user->update(['email_verified_at' => Carbon::now()]);
+            $otp->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Email verified successfully.'
+            ], 200);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'OTP verification failed.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // ================= LOGIN =================
     public function login(Request $request)
     {
         try {
             $request->validate([
                 'email' => 'required|email',
-                'password' => 'required'
+                'password' => 'required|string',
             ]);
 
             $user = User::where('email', $request->email)->first();
-
             if (!$user || !Hash::check($request->password, $user->password)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Invalid email or password'
+                    'message' => 'Invalid email or password.'
                 ], 401);
             }
 
-            if (!$user->hasVerifiedEmail()) {
+            if (is_null($user->email_verified_at)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Please verify your email before logging in.'
+                    'message' => 'Please verify your email first.'
                 ], 403);
             }
 
@@ -82,20 +130,21 @@ class AuthController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Login successful',
-                'token' => $token,
-                'user' => $user
-            ]);
+                'message' => 'Login successful.',
+                'user' => $user,
+                'token' => $token
+            ], 200);
 
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Login failed',
+                'message' => 'Login failed.',
                 'error' => $e->getMessage()
             ], 500);
         }
     }
 
+    // ================= LOGOUT =================
     public function logout(Request $request)
     {
         try {
@@ -103,15 +152,69 @@ class AuthController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Logged out successfully'
-            ]);
+                'message' => 'Logged out successfully.'
+            ], 200);
 
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Logout failed',
+                'message' => 'Logout failed.',
                 'error' => $e->getMessage()
             ], 500);
         }
     }
+
+    /**
+ * Resend OTP to user email
+ */
+public function resendOtp(Request $request)
+{
+    try {
+        $request->validate([
+            'email' => 'required|email'
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found.'
+            ], 404);
+        }
+
+        if (!is_null($user->email_verified_at)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Email already verified.'
+            ], 400);
+        }
+
+      
+        Otp::where('user_id', $user->id)->delete();
+
+        $otpCode = rand(100000, 999999);
+
+        Otp::create([
+            'user_id' => $user->id,
+            'otp' => $otpCode,
+            'expires_at' => now()->addMinutes(5)
+        ]);
+
+ 
+        Mail::to($user->email)->send(new SendOtpMail($otpCode));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'New OTP sent to your email.'
+        ], 200);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Resend OTP failed.',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
 }
