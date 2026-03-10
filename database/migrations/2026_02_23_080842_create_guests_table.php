@@ -11,19 +11,20 @@ return new class extends Migration
      */
     public function up(): void
     {
-      Schema::create('guests', function (Blueprint $table) {
-    $table->id();
-    $table->foreignId('event_id') 
-          ->constrained('events') 
-          ->onDelete('cascade');  
-    $table->integer('guest_no');
-    $table->string('name', 255);
-    $table->string('phone', 50)->nullable();
-    $table->string('address', 255)->nullable();
-    $table->text('note')->nullable();
-    $table->string('status')->default('pending');
-    $table->timestamps(); 
-});
+        Schema::create('guests', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('event_id')
+                ->constrained('events')
+                ->onDelete('cascade');
+            $table->string('name', 255);
+            $table->enum('currency', ['KHR', 'USD']);
+            $table->decimal('amount', 15, 2);
+            $table->string('phone', 50)->nullable();
+            $table->string('address', 255)->nullable();
+            $table->text('note')->nullable();
+            $table->string('status')->default('pending');
+            $table->timestamps();
+        });
     }
 
     /**

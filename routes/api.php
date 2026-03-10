@@ -31,7 +31,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
 
 Route::middleware(['auth:sanctum', 'verified', 'role:admin'])->group(function () {
-    
     // EVENTS
     Route::get('/events', [EventsController::class, 'index']);
     Route::post('/events', [EventsController::class, 'store']);
@@ -52,5 +51,4 @@ Route::middleware(['auth:sanctum', 'verified', 'role:admin'])->group(function ()
     Route::get('/transactions/{id}', [TransactionsController::class, 'show']);
     Route::patch('/transactions/{id}', [TransactionsController::class, 'update']);
     Route::delete('/transactions/{id}', [TransactionsController::class, 'destroy']);
-    
-});
+    });

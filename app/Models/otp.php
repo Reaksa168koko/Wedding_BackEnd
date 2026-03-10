@@ -15,7 +15,6 @@ class otp extends Model
         'expires_at'
     ];
 
-  
     protected $dates = [
         'expires_at'
     ];

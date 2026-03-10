@@ -8,15 +8,27 @@ use Illuminate\Database\Eloquent\Model;
 class guests extends Model
 {
     use HasFactory;
-      protected $fillable = ['event_id', 'guest_no', 'name', 'phone', 'address','status', 'note'];
-          public function event()
+
+   protected $fillable = [
+    'event_id',
+    'name',
+    'currency',
+    'amount',
+    'phone',
+    'address',
+    'status',
+    'note'
+];
+
+    // A Guest belongs to one Event
+    public function event()
     {
         return $this->belongsTo(events::class, 'event_id');
     }
 
-    // One Guest has many Transactions
+    // A Guest has many Transactions
     public function transactions()
     {
-        return $this->hasMany(transactions::class,'guest_id');
+        return $this->hasMany(transactions::class, 'guest_id');
     }
 }
